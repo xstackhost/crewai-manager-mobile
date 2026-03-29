@@ -11,7 +11,9 @@
       "resizeMode": "contain",
       "backgroundColor": "#0a0a0f"
     },
-    "assetBundlePatterns": ["**/*"],
+    "assetBundlePatterns": [
+      "**/*"
+    ],
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.crewai.manager"
@@ -26,6 +28,11 @@
     "web": {
       "favicon": "./assets/favicon.png"
     },
-    "plugins": []
+    "plugins": [],
+    "extra": {
+      "eas": {
+        "projectId": "31fcadb6-c5f1-46ab-9b5a-5e009f98be92"
+      }
+    }
   }
 }
