@@ -1,26 +1,39 @@
 import React, { useEffect, useState } from 'react';
 import { StatusBar } from 'expo-status-bar';
 import { View, ActivityIndicator, StyleSheet } from 'react-native';
-import { getServerUrl, getToken } from './src/api';
-import ServerSetup from './src/screens/ServerSetup';
-import LoginScreen from './src/screens/Login';
-import DashboardScreen from './src/screens/Dashboard';
+import { NavigationContainer } from '@react-navigation/native';
+import { SafeAreaProvider } from 'react-native-safe-area-context';
+import { getServerUrl, getToken, clearAuth } from './src/api';
+import { MainNavigator, AuthNavigator } from './src/navigation';
 
 export default function App() {
-  const [screen, setScreen] = useState('loading'); // loading | setup | login | app
+  const [state, setState] = useState('loading'); // loading | auth | app
 
   useEffect(() => {
     async function checkState() {
       const url = await getServerUrl();
-      if (!url) { setScreen('setup'); return; }
+      if (!url) { setState('auth'); return; }
       const token = await getToken();
-      if (!token) { setScreen('login'); return; }
-      setScreen('app');
+      if (!token) { setState('auth'); return; }
+      setState('app');
     }
     checkState();
   }, []);
 
-  if (screen === 'loading') {
+  async function handleLogout() {
+    await clearAuth();
+    setState('auth');
+  }
+
+  function handleLogin() {
+    setState('app');
+  }
+
+  function handleServerConfigured(navigation) {
+    // Navigation handled inside AuthNavigator
+  }
+
+  if (state === 'loading') {
     return (
       <View style={s.splash}>
         <ActivityIndicator color="#7c3aed" size="large" />
@@ -29,32 +42,20 @@ export default function App() {
     );
   }
 
-  if (screen === 'setup') {
-    return (
-      <>
-        <ServerSetup onComplete={() => setScreen('login')} />
-        <StatusBar style="light" />
-      </>
-    );
-  }
-
-  if (screen === 'login') {
-    return (
-      <>
-        <LoginScreen
-          onLogin={() => setScreen('app')}
-          onChangeServer={() => setScreen('setup')}
-        />
-        <StatusBar style="light" />
-      </>
-    );
-  }
-
   return (
-    <>
-      <DashboardScreen onLogout={() => setScreen('login')} />
-      <StatusBar style="light" />
-    </>
+    <SafeAreaProvider>
+      <NavigationContainer>
+        <StatusBar style="light" />
+        {state === 'auth' ? (
+          <AuthNavigator
+            onLogin={handleLogin}
+            onServerConfigured={() => {}}
+          />
+        ) : (
+          <MainNavigator onLogout={handleLogout} />
+        )}
+      </NavigationContainer>
+    </SafeAreaProvider>
   );
 }
 

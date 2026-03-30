@@ -1,6 +1,11 @@
-import React, { useEffect, useState } from 'react';
-import { View, Text, ScrollView, TouchableOpacity, StyleSheet, RefreshControl, ActivityIndicator } from 'react-native';
+import React, { useEffect, useState, useCallback } from 'react';
+import {
+  View, Text, ScrollView, TouchableOpacity, StyleSheet,
+  RefreshControl, ActivityIndicator,
+} from 'react-native';
+import { useNavigation } from '@react-navigation/native';
 import { fetchDashboard, clearAuth, getUser } from '../api';
+import theme from '../theme';
 
 function StatCard({ label, value, color }) {
   return (
@@ -11,11 +16,16 @@ function StatCard({ label, value, color }) {
   );
 }
 
-function ExecRow({ exec }) {
-  const statusColors = { completed: '#10b981', failed: '#ef4444', running: '#3b82f6', pending: '#6b7280' };
-  const color = statusColors[exec.status] || '#6b7280';
+function ExecRow({ exec, onPress }) {
+  const statusColors = {
+    completed: theme.green,
+    failed: theme.red,
+    running: theme.blue,
+    pending: theme.textMuted,
+  };
+  const color = statusColors[exec.status] || theme.textMuted;
   return (
-    <View style={s.execRow}>
+    <TouchableOpacity style={s.execRow} onPress={onPress} activeOpacity={0.7}>
       <View style={{ flex: 1 }}>
         <Text style={s.execName}>{exec.target_name || `#${exec.id}`}</Text>
         <Text style={s.execTime}>{exec.started_at?.slice(0, 16).replace('T', ' ')}</Text>
@@ -23,11 +33,12 @@ function ExecRow({ exec }) {
       <View style={[s.execBadge, { backgroundColor: color + '20', borderColor: color }]}>
         <Text style={[s.execBadgeText, { color }]}>{exec.status}</Text>
       </View>
-    </View>
+    </TouchableOpacity>
   );
 }
 
 export default function DashboardScreen({ onLogout }) {
+  const navigation = useNavigation();
   const [data, setData] = useState(null);
   const [user, setUser] = useState(null);
   const [refreshing, setRefreshing] = useState(false);
@@ -58,23 +69,32 @@ export default function DashboardScreen({ onLogout }) {
     onLogout();
   }
 
+  function navigateToExecution(exec) {
+    navigation.navigate('RunsTab', {
+      screen: 'ExecutionDetail',
+      params: { executionId: exec.id },
+    });
+  }
+
   if (!data) {
     return (
       <View style={s.centered}>
-        {error
-          ? <Text style={s.errorText}>{error}</Text>
-          : <ActivityIndicator color="#7c3aed" size="large" />
-        }
+        {error ? (
+          <Text style={s.errorText}>{error}</Text>
+        ) : (
+          <ActivityIndicator color={theme.primary} size="large" />
+        )}
       </View>
     );
   }
 
   const recentExecs = (data.executions || []).slice(0, 5);
+  const runningCount = (data.executions || []).filter(e => e.status === 'running').length;
 
   return (
     <ScrollView
       style={s.container}
-      refreshControl={<RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor="#7c3aed" />}
+      refreshControl={<RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor={theme.primary} />}
     >
       {/* Header */}
       <View style={s.header}>
@@ -90,56 +110,147 @@ export default function DashboardScreen({ onLogout }) {
       {/* Stats */}
       <Text style={s.sectionTitle}>Overview</Text>
       <View style={s.statsGrid}>
-        <StatCard label="Agents" value={data.agents?.length || 0} color="#7c3aed" />
-        <StatCard label="Crews" value={data.crews?.length || 0} color="#3b82f6" />
-        <StatCard label="Executions" value={data.executions?.length || 0} color="#10b981" />
-        <StatCard label="Running" value={data.executions?.filter(e => e.status === 'running').length || 0} color="#f59e0b" />
+        <StatCard label="Agents" value={data.agents?.length || 0} color={theme.primary} />
+        <StatCard label="Crews" value={data.crews?.length || 0} color={theme.blue} />
+        <StatCard label="Tools" value={data.tools?.length || 0} color={theme.yellow} />
+        <StatCard label="LLM Configs" value={data.llmConfigs?.length || 0} color="#a855f7" />
+        <StatCard label="Executions" value={data.executions?.length || 0} color={theme.green} />
+        <StatCard label="Running" value={runningCount} color={theme.yellow} />
+      </View>
+
+      {/* Quick actions */}
+      <Text style={s.sectionTitle}>Quick Actions</Text>
+      <View style={s.quickGrid}>
+        <TouchableOpacity
+          style={s.quickCard}
+          onPress={() => navigation.navigate('AgentsTab', { screen: 'AgentForm' })}
+        >
+          <Text style={s.quickIcon}>🤖</Text>
+          <Text style={s.quickTitle}>New Agent</Text>
+          <Text style={s.quickSub}>Create an AI agent</Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={s.quickCard}
+          onPress={() => navigation.navigate('CrewsTab', { screen: 'CrewForm' })}
+        >
+          <Text style={s.quickIcon}>⚡</Text>
+          <Text style={s.quickTitle}>New Crew</Text>
+          <Text style={s.quickSub}>Assemble a crew</Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={s.quickCard}
+          onPress={() => navigation.navigate('CrewsTab', { screen: 'CrewList' })}
+        >
+          <Text style={s.quickIcon}>▶️</Text>
+          <Text style={s.quickTitle}>Run Crew</Text>
+          <Text style={s.quickSub}>Execute a crew</Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={s.quickCard}
+          onPress={() => navigation.navigate('RunsTab', { screen: 'ExecutionList' })}
+        >
+          <Text style={s.quickIcon}>📊</Text>
+          <Text style={s.quickTitle}>View Runs</Text>
+          <Text style={s.quickSub}>See all executions</Text>
+        </TouchableOpacity>
       </View>
 
       {/* Recent executions */}
       <Text style={s.sectionTitle}>Recent Executions</Text>
       <View style={s.card}>
-        {recentExecs.length === 0
-          ? <Text style={s.emptyText}>No executions yet</Text>
-          : recentExecs.map(e => <ExecRow key={e.id} exec={e} />)
-        }
+        {recentExecs.length === 0 ? (
+          <Text style={s.emptyText}>No executions yet</Text>
+        ) : (
+          recentExecs.map(e => (
+            <ExecRow key={e.id} exec={e} onPress={() => navigateToExecution(e)} />
+          ))
+        )}
       </View>
 
-      {/* Quick nav */}
-      <Text style={s.sectionTitle}>Quick Actions</Text>
-      <View style={s.quickGrid}>
-        {['Agents', 'Crews', 'Tasks', 'Executions'].map(item => (
-          <TouchableOpacity key={item} style={s.quickBtn}>
-            <Text style={s.quickBtnText}>{item}</Text>
-          </TouchableOpacity>
-        ))}
-      </View>
+      <View style={{ height: 32 }} />
     </ScrollView>
   );
 }
 
 const s = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#0a0a0f' },
-  centered: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#0a0a0f' },
-  errorText: { color: '#ef4444', fontSize: 15 },
-  header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: 20, paddingTop: 16 },
-  greeting: { fontSize: 20, fontWeight: 'bold', color: '#fff' },
-  subtitle: { color: '#6b7280', fontSize: 13, marginTop: 2 },
-  logoutBtn: { backgroundColor: '#1f2937', paddingHorizontal: 14, paddingVertical: 8, borderRadius: 8 },
-  logoutText: { color: '#9ca3af', fontSize: 13 },
-  sectionTitle: { color: '#9ca3af', fontSize: 11, fontWeight: '600', letterSpacing: 1, textTransform: 'uppercase', paddingHorizontal: 20, marginTop: 20, marginBottom: 12 },
+  container: { flex: 1, backgroundColor: theme.bg },
+  centered: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: theme.bg },
+  errorText: { color: theme.red, fontSize: 15 },
+  header: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    padding: 20,
+    paddingTop: 16,
+  },
+  greeting: { fontSize: 20, fontWeight: 'bold', color: theme.text },
+  subtitle: { color: theme.textMuted, fontSize: 13, marginTop: 2 },
+  logoutBtn: {
+    backgroundColor: theme.border,
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: 8,
+  },
+  logoutText: { color: theme.textSub, fontSize: 13 },
+  sectionTitle: {
+    color: theme.textSub,
+    fontSize: 11,
+    fontWeight: '600',
+    letterSpacing: 1,
+    textTransform: 'uppercase',
+    paddingHorizontal: 20,
+    marginTop: 20,
+    marginBottom: 12,
+  },
   statsGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 12, paddingHorizontal: 20 },
-  statCard: { backgroundColor: '#111827', borderRadius: 12, padding: 16, flex: 1, minWidth: '44%', borderLeftWidth: 3, borderWidth: 1, borderColor: '#1f2937' },
-  statValue: { fontSize: 28, fontWeight: 'bold', color: '#fff' },
-  statLabel: { color: '#9ca3af', fontSize: 12, marginTop: 4 },
-  card: { marginHorizontal: 20, backgroundColor: '#111827', borderRadius: 12, overflow: 'hidden', borderWidth: 1, borderColor: '#1f2937' },
-  execRow: { flexDirection: 'row', alignItems: 'center', padding: 14, borderBottomWidth: 1, borderBottomColor: '#1f2937' },
+  statCard: {
+    backgroundColor: theme.card,
+    borderRadius: 12,
+    padding: 16,
+    flex: 1,
+    minWidth: '44%',
+    borderLeftWidth: 3,
+    borderWidth: 1,
+    borderColor: theme.border,
+  },
+  statValue: { fontSize: 28, fontWeight: 'bold', color: theme.text },
+  statLabel: { color: theme.textSub, fontSize: 12, marginTop: 4 },
+  card: {
+    marginHorizontal: 20,
+    backgroundColor: theme.card,
+    borderRadius: 12,
+    overflow: 'hidden',
+    borderWidth: 1,
+    borderColor: theme.border,
+  },
+  execRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 14,
+    borderBottomWidth: 1,
+    borderBottomColor: theme.border,
+  },
   execName: { color: '#e5e7eb', fontSize: 14, fontWeight: '500' },
-  execTime: { color: '#6b7280', fontSize: 12, marginTop: 2 },
-  execBadge: { paddingHorizontal: 10, paddingVertical: 4, borderRadius: 20, borderWidth: 1 },
+  execTime: { color: theme.textMuted, fontSize: 12, marginTop: 2 },
+  execBadge: {
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 20,
+    borderWidth: 1,
+  },
   execBadgeText: { fontSize: 11, fontWeight: '600', textTransform: 'capitalize' },
-  emptyText: { color: '#6b7280', padding: 20, textAlign: 'center' },
-  quickGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 10, paddingHorizontal: 20, paddingBottom: 32 },
-  quickBtn: { backgroundColor: '#111827', borderRadius: 10, paddingVertical: 14, paddingHorizontal: 20, flex: 1, alignItems: 'center', borderWidth: 1, borderColor: '#374151' },
-  quickBtnText: { color: '#d1d5db', fontWeight: '600' },
+  emptyText: { color: theme.textMuted, padding: 20, textAlign: 'center' },
+  quickGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 12, paddingHorizontal: 20 },
+  quickCard: {
+    backgroundColor: theme.card,
+    borderRadius: 12,
+    padding: 16,
+    flex: 1,
+    minWidth: '44%',
+    borderWidth: 1,
+    borderColor: theme.border,
+  },
+  quickIcon: { fontSize: 24, marginBottom: 8 },
+  quickTitle: { color: theme.text, fontWeight: '700', fontSize: 14, marginBottom: 2 },
+  quickSub: { color: theme.textSub, fontSize: 12 },
 });
