@@ -23,8 +23,7 @@
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#0a0a0f"
       },
-      "package": "com.crewai.manager",
-      "usesCleartextTraffic": true
+      "package": "com.crewai.manager"
     },
     "web": {
       "favicon": "./assets/favicon.png"
